@@ -7,6 +7,8 @@
  */
 #include <msp430.h> 
 
+#define	RGTfarThreshold	0x0140
+
 void moveFWD(void);
 void turnRGT(void);
 void turnLFTtank(void);
@@ -76,6 +78,7 @@ int main(void) {
 }
 
 void getRGTsensorRead(void){
+	k=0;
 	ADC10CTL0 = 0;											// Turn off ADC to make changes
 	ADC10CTL1 = INCH_5 | ADC10DIV_3;						// Use channel A5, CLK/4
 	ADC10AE0 = BIT5;										// Enable P1.5 as ADC input
@@ -89,14 +92,15 @@ void getRGTsensorRead(void){
 void isClosetoRGTwall(void){
 	if(RGTsample[k]>0x200){
 		turnLFTsmall();
-	}else if(RGTsample[k]<0x0200 && RGTsample[k]>0x0150){
+	}else if(RGTsample[k]<0x0200 && RGTsample[k]>RGTfarThreshold){
 		turnRGTsmall();
-	}else if(RGTsample[k]<=0x0150){
+	}else if(RGTsample[k]<RGTfarThreshold){
 		turnRGT();
 	}
 }
 
 void getCTRsensorRead(void){
+	j=0;
 	ADC10CTL0 = 0;											// Turn off ADC to make changes
 	ADC10CTL1 = INCH_4 | ADC10DIV_3 ;						// Use channel A4, CLK/4
 	ADC10AE0 = BIT4;		 								// Enable P1.4 as input
@@ -108,11 +112,11 @@ void getCTRsensorRead(void){
 }
 
 void isClosetoCTRwall(void){
-	if(CTRsample[j]>0x0180){
+	while(CTRsample[j]>0x0160){
 		turnLFTtank();
-	}else{
-		moveFWD();
+		getCTRsensorRead();
 	}
+	moveFWD();
 }
 
 void moveFWD(void){
@@ -167,7 +171,7 @@ void turnRGTsmall(void){
 void turnLFTtank(void){
 	int i=0;
 
-    while(i<0x24FF){
+    while(i<0x0100){
     	P2OUT |= BIT5;						// Enable right motor
     	P2OUT |= BIT0;						// Disable left motor
 
@@ -194,29 +198,33 @@ void turnRGT(void){
     	i++;
     }
     i=0;
-    while(i<0x2000){
-		P2OUT |= BIT0;						// Redundant motor enables
-	    P2OUT |= BIT5;
+    getRGTsensorRead();
+    if(RGTsample[k]<RGTfarThreshold){
 
-	    P2OUT |= BIT1;						// Confirm correct motor direction
-	    P2OUT &= ~BIT3;
+		while(i<0x2000){
+			P2OUT |= BIT0;						// Redundant motor enables
+			P2OUT |= BIT5;
 
-	    TA1CCTL1 = OUTMOD_7;				// To be thorough - not needed for duty cylce of 50% but otherwise is helpful
+			P2OUT |= BIT1;						// Confirm correct motor direction
+			P2OUT &= ~BIT3;
 
-	    TA1CCTL2 = OUTMOD_3;
+			TA1CCTL1 = OUTMOD_7;				// To be thorough - not needed for duty cylce of 50% but otherwise is helpful
 
-	    i++;
-    }
-    i=0;
-    while(i<0x3FFF){
-    	P2OUT &= ~BIT5;						// Disable right motor
-    	P2OUT |= BIT0;						// Enable left motor
+			TA1CCTL2 = OUTMOD_3;
 
-    	P2OUT |= BIT1;						// Confirm direction for L motor is FWD
+			i++;
+		}
+		i=0;
+		while(i<0x3FFF){
+			P2OUT &= ~BIT5;						// Disable right motor
+			P2OUT |= BIT0;						// Enable left motor
 
-    	TA1CCTL1 = OUTMOD_7;
+			P2OUT |= BIT1;						// Confirm direction for L motor is FWD
 
-    	i++;
+			TA1CCTL1 = OUTMOD_7;
+
+			i++;
+		}
     }
 }
 
